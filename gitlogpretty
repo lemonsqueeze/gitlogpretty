@@ -1,0 +1,68 @@
+#!/bin/bash
+
+extra=""
+if [ "$1" = "--myselect" ]; then
+    shift; extra=$(myselect $(git branch | sed -e 's/\*//' ))
+    [ -n "$extra" ] || exit 0;
+fi
+
+hide_remote=1
+if [ "$1" = "--remote" ]; then
+    shift; hide_remote=""
+fi
+if [ "$1" = "--all" ]; then
+    hide_remote=""
+fi
+
+# NB: '###': field separator for perl script
+
+#format="[%an] %h %ad %d ### %s"
+#format="[%an] %C(red)%h%Creset %C(green)%ad%Creset %C(yellow)###%d###%Creset %s"
+
+# No colors:
+# format="[%an] %h %ad% ###%d### %s"
+
+#format="%C(yellow)[%an]%Creset %C(white)%h%Creset %C(white)%ad%Creset %C(yellow)###%d###%Creset %s"
+format="%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s"
+
+width=`[ "$1" != "--all" ] && echo 96 || echo 116`
+
+git log --pretty=format:"$format" --graph --date=short "$@" $extra |
+perl -e '
+sub format_branches
+{ 
+    my ($branches) = @_;
+    my @branches; my @tags;
+
+    # Split tags and branches
+    $branches =~ s|^ \((.*)\)|$1|;   # remove surrounding ()
+    foreach my $b (split(/, /, $branches))  {
+        if ($b =~ m/^tag: (.*)/)  {  push(@tags, $1);  }
+        else                      {  push(@branches, $b);  }
+    }
+
+    if ("'$hide_remote'")  {  @branches = grep(!/\//, @branches);  }
+
+    $branches = "";
+    if (@branches) { $branches =  sprintf(" (%s)", join(", ", @branches)); }
+    if (@tags)     { $branches .= sprintf(" <%s>", join(", ", @tags)); }
+    return $branches;
+}
+
+# Branch: hide extra remote branches if $hide_remote is set
+# Align fields
+foreach my $str (<STDIN>) 
+{ 
+    if (! ($str =~ m/###/) )  {  print $str; next;  }
+
+    my ($a, $branches, $b) = split(/###/, "$str");
+    chomp($b);
+
+    if ($branches)  {  $branches = format_branches($branches);  }
+
+    printf("%-'$width's%s\n", "$a$branches", "$b"); 
+    # Right align branches
+    # printf("%-'$[$width-20]'s%25s%s\n", $a, $branches, "$b"); 
+}'   | less -cRS
+
+
