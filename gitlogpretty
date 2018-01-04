@@ -3,9 +3,12 @@
 #
 # Usage: gitlogpretty [options] [git options]
 #             --myselect    select branch to display
+#             --full        don't stop at first 200 commits
 #             --remote      show remote branches
 #             --all         git log --all + show remote branches
 
+my $max = 200;
+my $limit = "-n $max";
 my $extra = "";
 my $hide_remote = 1;
 my $width = 59;
@@ -20,6 +23,7 @@ for (; @ARGV; shift(@ARGV)) {
 	next;
     }
 
+    if ($ARGV[0] eq "--full")    {  $limit = ""; next;  }
     if ($ARGV[0] eq "--remote")  {  $hide_remote = 0; next;  }
     if ($ARGV[0] eq "--all")     {  $hide_remote = 0; $width = 79; $extra .= " --all"; next;  }
     
@@ -86,10 +90,13 @@ my $format = "%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Cres
 
 
 # Format / filter branches and align fields
-open(IN, "git log --pretty=format:'$format' $opts --graph --date=short @ARGV $extra |");
+open(IN, "git log $limit --pretty=format:'$format' $opts --graph --date=short @ARGV $extra |");
 open(OUT,"| less -cRS");
+
+my $lines = 0;
 foreach my $str (<IN>)
 {
+    $lines++;
     if ($str !~ m/###/)  {  print OUT $str; next;  }
 
     my ($a, $branches, $b) = split(/###/, "$str");
@@ -101,3 +108,4 @@ foreach my $str (<IN>)
     printf OUT ("%s%s%s\n", "$a$branches", " " x $n, $b); 
 }
 
+if ($limit && $lines >= $max)  {  print OUT "...\n"; }
