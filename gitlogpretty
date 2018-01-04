@@ -1,34 +1,43 @@
-#!/bin/bash
+#!/usr/bin/perl
+# git log pretty formatting, one commit per line
+#
+# Usage: gitlogpretty [options] [git options]
+#             --myselect    select branch to display
+#             --remote      show remote branches
+#             --all         git log --all + show remote branches
 
-extra=""
-if [ "$1" = "--myselect" ]; then
-    shift; extra=$(myselect $(git branch | sed -e 's/\*//' ))
-    [ -n "$extra" ] || exit 0;
-fi
+my $extra = "";
+my $hide_remote = 1;
+my $width = 59;
 
-hide_remote=1
-if [ "$1" = "--remote" ]; then
-    shift; hide_remote=""
-fi
-if [ "$1" = "--all" ]; then
-    hide_remote=""
-fi
 
-# NB: '###': field separator for perl script
+# cmdline options
+for (; @ARGV; shift(@ARGV)) {
+    if ($ARGV[0] eq "--myselect" ) {
+	my $cmd = 'myselect $(git branch | sed -e "s/\*//")';
+	$extra .= " " . `bash -c '$cmd' `;
+	($extra) || exit 0;
+	next;
+    }
 
-#format="[%an] %h %ad %d ### %s"
-#format="[%an] %C(red)%h%Creset %C(green)%ad%Creset %C(yellow)###%d###%Creset %s"
+    if ($ARGV[0] eq "--remote")  {  $hide_remote = 0; next;  }
+    if ($ARGV[0] eq "--all")     {  $hide_remote = 0; $width = 79; $extra .= " --all"; next;  }
+    
+    last;   # Unrecognized options, pass to git
+}
 
-# No colors:
-# format="[%an] %h %ad% ###%d### %s"
 
-#format="%C(yellow)[%an]%Creset %C(white)%h%Creset %C(white)%ad%Creset %C(yellow)###%d###%Creset %s"
-format="%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s"
+# String length without ansi color codes
+sub real_length
+{
+    my ($s) = @_;
+    $s =~ s/\e\[[^m]*m//g;
+    return length($s);
+}
 
-width=`[ "$1" != "--all" ] && echo 96 || echo 116`
 
-git log --pretty=format:"$format" --graph --date=short "$@" $extra |
-perl -e '
+# Hide remote branches if needed 
+# Display branches and tags as "(branches) <tags>"
 sub format_branches
 { 
     my ($branches) = @_;
@@ -41,7 +50,8 @@ sub format_branches
         else                      {  push(@branches, $b);  }
     }
 
-    if ("'$hide_remote'")  {  @branches = grep(!/\//, @branches);  }
+    # Hide remote branches
+    if ($hide_remote)  {  @branches = grep(!/\//, @branches);  }
 
     $branches = "";
     if (@branches) { $branches =  sprintf(" (%s)", join(", ", @branches)); }
@@ -49,20 +59,45 @@ sub format_branches
     return $branches;
 }
 
-# Branch: hide extra remote branches if $hide_remote is set
-# Align fields
-foreach my $str (<STDIN>) 
-{ 
-    if (! ($str =~ m/###/) )  {  print $str; next;  }
+
+######################################################################################################
+# Styles
+# Note: '###' = field separator for us
+
+# Show colored ascii-art for branches ?
+my $opts = "--color";
+
+
+# No colors
+#my $format = "[%an] %h %ad% ###%d### %s";
+
+# Matrix style
+my $format = "%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s";
+# $opts = "";   # For purists
+
+# Italian style
+#my $format = "[%an] %C(red)%h%Creset %C(green)%ad%Creset %C(yellow)###%d###%Creset %s";
+
+# Lemon style
+#my $format = "%C(yellow)[%an]%Creset %C(white)%h%Creset %C(white)%ad%Creset %C(yellow)###%d###%Creset %s";
+
+
+######################################################################################################
+
+
+# Format / filter branches and align fields
+open(IN, "git log --pretty=format:'$format' $opts --graph --date=short @ARGV $extra |");
+open(OUT,"| less -cRS");
+foreach my $str (<IN>)
+{
+    if ($str !~ m/###/)  {  print OUT $str; next;  }
 
     my ($a, $branches, $b) = split(/###/, "$str");
     chomp($b);
 
     if ($branches)  {  $branches = format_branches($branches);  }
 
-    printf("%-'$width's%s\n", "$a$branches", "$b"); 
-    # Right align branches
-    # printf("%-'$[$width-20]'s%25s%s\n", $a, $branches, "$b"); 
-}'   | less -cRS
-
+    my $n = $width - real_length("$a$branches");
+    printf OUT ("%s%s%s\n", "$a$branches", " " x $n, $b); 
+}
 
