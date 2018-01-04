@@ -11,6 +11,17 @@ my $extra = "";             # extra git options
 my $hide_remote = 1;        # hide remote branches
 my $width = 59;             # formatting
 
+#my $style = "plain";
+#my $style = "italian";
+#my $style = "lemon";
+my $style = "matrix";
+
+# Colored ascii-art for branches when running with --graph ?
+my $opts = "--color";
+# $opts = "";
+
+
+######################################################################################################
 
 # cmdline options
 for (; @ARGV; shift(@ARGV)) {
@@ -66,34 +77,79 @@ sub format_branches
 
 ######################################################################################################
 # Styles
-# Note: '###' = field separator for us
 
-# Show colored ascii-art for branches ?
-my $opts = "--color";
+# Color codes
+my $end  = "\e[0m";
+my $bold = "\e[1m";
 
+my %colors = (
+    "grey"            => "\e[40;30;1m",
+    "bold_red"        => "\e[40;31;1m",
+    "bold_green"      => "\e[40;32;1m",
+    "bold_yellow"     => "\e[40;33;1m",
+    "bold_blue"       => "\e[40;34;1m",
+    "bold_purple"     => "\e[40;35;1m",
+    "bold_light_blue" => "\e[40;36;1m",
+    "bold"            => "\e[40;37;1m",
 
-# No colors
-#my $format = "[%an] %h %ad% ###%d### %s";
+    "invisible"  => "\e[40;30m",
+    "black"      => "\e[40;30m",
+    "red"        => "\e[40;31m",
+    "green"      => "\e[40;32m",
+    "yellow"     => "\e[40;33m",
+    "blue"       => "\e[40;34m",
+    "purple"     => "\e[40;35m",
+    "light_blue" => "\e[40;36m",
+    "white"      => "\e[40;37m",
+);
 
-# Italian style
-#my $format = "[%an] %C(red)%h%Creset %C(green)%ad%Creset %C(yellow)###%d###%Creset %s";
+my %style;
 
-# Lemon style
-#my $format = "%C(yellow)[%an]%Creset %C(white)%h%Creset %C(white)%ad%Creset %C(yellow)###%d###%Creset %s";
+if ($style eq "matrix") {
+    %style = ("author" => "green",
+	      "hash"   => "bold_green",
+	      "time"   => "green",
+	      "branch" => "bold_green",
+	      "text"   => "green",
+	      "merge"   => "bold_green");   # "Merge pull request ..."
+}
 
-# Matrix style
-my $format = "%C(green)###%an###%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s";
-# $opts = "";   # For purists
+if ($style eq "italian") {
+    %style = ("author" => "normal",
+	      "hash"   => "red",
+	      "time"   => "green",
+	      "branch" => "bold_green",
+	      "text"   => "green",
+	      "merge"  => "white");
+}
 
+if ($style eq "lemon") {
+    %style = ("author" => "yellow",
+	      "hash"   => "white",
+	      "time"   => "white",
+	      "branch" => "bold_yellow",
+	      "text"   => "white",
+	      "merge"  => "yellow");
+}
+
+sub style
+{  
+    my ($s) = @_;
+    return $colors{$style{$s}};
+}
 
 ######################################################################################################
+# Formatting
 
+# Note: '###' = field separator for us
+my $format = "###%an###%h###%ad###%d###%s";
 
 # Format / filter branches and align fields
 # Don't run with --graph by default, slow on large repos and messes up formatting.
 open(IN, "git log --pretty=format:'$format' $opts --date=short @ARGV $extra |");
 open(OUT,"| less -cRS");
-binmode IN, ':encoding(UTF-8)';  binmode OUT, ':encoding(UTF-8)';
+binmode IN,  ':encoding(UTF-8)';
+binmode OUT, ':encoding(UTF-8)';
 
 my $lines = 0;
 while (my $str = <IN>)
@@ -101,22 +157,30 @@ while (my $str = <IN>)
     $lines++;
     if ($str !~ m/###/)  {  print OUT $str; next;  }
 
-    my ($h, $author, $a, $branches, $b) = split(/###/, "$str");
-    chomp($b);
+    my ($head, $author, $hash, $time, $branches, $text) = split(/###/, "$str");
+    chomp($text);
 
     if ($branches)  {  $branches = format_branches($branches);  }
 
     # Just keep last name if author too long.
     if (length($author) > $author_max)  {  $author =~ s/.* //;  }
 
-    # Highlight merges if running without --graph
-    if (!real_length($h))
-    {  if ($b =~ m/Merge pull request/)  {  $h = "* $h";  } else  {  $h = "  $h";  }  }
+    # Highlight merges 
+    if (!real_length($head))    # running without --graph
+    {  if ($text =~ m/^Merge pull request/)  {  $head = "* $h";  } else {  $head = "  ";  }  }    
+    if ($text =~ m/^Merge pull request/)  {  $text = $end . style("merge") . $text;  }
+
+    # Apply style
+    $author   = style("author") . $author   . $end;
+    $hash     = style("hash")   . $hash     . $end;
+    $time     = style("time")   . $time     . $end;
+    $branches = style("branch") . $branches . $end;
+    $text     = style("text")   . $text     . $end;
     
     my $n = $author_max - real_length($author);
-    my $str = sprintf("$h%s$author$a$branches", " " x $n);
+    my $str = sprintf("$head%s$author $hash $time $branches", " " x $n);
 
     my $n = $width - real_length($str);
-    printf OUT ("$str%s$b\n", " " x $n);
+    printf OUT ("$str%s $text\n", " " x $n);
 }
 
