@@ -89,6 +89,7 @@ my $format = "%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Cres
 # Don't run with --graph by default, slow on large repos and messes up formatting.
 open(IN, "git log --pretty=format:'$format' $opts --date=short @ARGV $extra |");
 open(OUT,"| less -cRS");
+binmode IN, ':encoding(UTF-8)';  binmode OUT, ':encoding(UTF-8)';
 
 my $lines = 0;
 while (my $str = <IN>)
