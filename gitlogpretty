@@ -51,6 +51,9 @@ sub format_branches
         else                      {  push(@branches, $b);  }
     }
 
+    # Hide remote/HEAD
+    @branches = grep(!/\/HEAD/, @branches);
+
     # Hide remote branches
     if ($hide_remote)  {  @branches = grep(!/\//, @branches);  }
 
@@ -106,6 +109,10 @@ while (my $str = <IN>)
     # Just keep last name if author too long.
     if (length($author) > $author_max)  {  $author =~ s/.* //;  }
 
+    # Highlight merges if running without --graph
+    if (!real_length($h))
+    {  if ($b =~ m/Merge pull request/)  {  $h = "* $h";  } else  {  $h = "  $h";  }  }
+    
     my $n = $author_max - real_length($author);
     my $str = sprintf("$h%s$author$a$branches", " " x $n);
 
