@@ -6,9 +6,10 @@
 #             --remote      show remote branches
 #             --all         git log --all + show remote branches
 
-my $extra = "";
-my $hide_remote = 1;
-my $width = 59;
+my $author_max = 15;        # max author length
+my $extra = "";             # extra git options
+my $hide_remote = 1;        # hide remote branches
+my $width = 59;             # formatting
 
 
 # cmdline options
@@ -71,15 +72,15 @@ my $opts = "--color";
 # No colors
 #my $format = "[%an] %h %ad% ###%d### %s";
 
-# Matrix style
-my $format = "%C(green)[%an]%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s";
-# $opts = "";   # For purists
-
 # Italian style
 #my $format = "[%an] %C(red)%h%Creset %C(green)%ad%Creset %C(yellow)###%d###%Creset %s";
 
 # Lemon style
 #my $format = "%C(yellow)[%an]%Creset %C(white)%h%Creset %C(white)%ad%Creset %C(yellow)###%d###%Creset %s";
+
+# Matrix style
+my $format = "%C(green)###%an###%Creset %C(bold)%C(green)%h%Creset %C(green)%ad%Creset %C(bold)%C(green)###%d###%Creset %C(green)%s";
+# $opts = "";   # For purists
 
 
 ######################################################################################################
@@ -97,12 +98,18 @@ while (my $str = <IN>)
     $lines++;
     if ($str !~ m/###/)  {  print OUT $str; next;  }
 
-    my ($a, $branches, $b) = split(/###/, "$str");
+    my ($h, $author, $a, $branches, $b) = split(/###/, "$str");
     chomp($b);
 
     if ($branches)  {  $branches = format_branches($branches);  }
 
-    my $n = $width - real_length("$a$branches");
-    printf OUT ("%s%s%s\n", "$a$branches", " " x $n, $b); 
+    # Just keep last name if author too long.
+    if (length($author) > $author_max)  {  $author =~ s/.* //;  }
+
+    my $n = $author_max - real_length($author);
+    my $str = sprintf("$h%s$author$a$branches", " " x $n);
+
+    my $n = $width - real_length($str);
+    printf OUT ("$str%s$b\n", " " x $n);
 }
 
