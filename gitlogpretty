@@ -181,6 +181,6 @@ while (my $str = <IN>)
     my $str = sprintf("$head%s$author $hash $time $branches", " " x $n);
 
     my $n = $width - real_length($str);
-    printf OUT ("$str%s $text\n", " " x $n);
+    printf OUT ("$str%s %s\n", " " x $n, $text);
 }
 
